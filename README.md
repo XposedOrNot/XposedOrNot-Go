@@ -13,7 +13,6 @@
 
 <p align="center">
   <a href="https://pkg.go.dev/github.com/XposedOrNot/XposedOrNot-Go"><img src="https://pkg.go.dev/badge/github.com/XposedOrNot/XposedOrNot-Go.svg" alt="Go Reference"></a>
-  <a href="https://github.com/XposedOrNot/XposedOrNot-Go/actions"><img src="https://img.shields.io/github/actions/workflow/status/XposedOrNot/XposedOrNot-Go/build.yml?branch=main" alt="Build Status"></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <a href="https://go.dev"><img src="https://img.shields.io/badge/Go-1.21+-00ADD8.svg" alt="Go Version"></a>
 </p>
