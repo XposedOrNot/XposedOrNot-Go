@@ -98,7 +98,7 @@ type ExposedBreach struct {
 	BreachedDate   string `json:"breachedDate"`
 	Domain         string `json:"domain"`
 	Industry       string `json:"industry"`
-	ExposedData    string `json:"exposedData"`
+	ExposedData    []string `json:"exposedData"`
 	ExposedRecords int    `json:"exposedRecords"`
 	Verified       bool   `json:"verified"`
 	Logo           string `json:"logo"`

@@ -108,13 +108,12 @@ func TestCheckPasswordNotFound(t *testing.T) {
 	}
 	c.passwordBaseURL = srv.URL
 
-	_, err = c.CheckPassword(context.Background(), "unique-password")
-	if err == nil {
-		t.Fatal("expected error, got nil")
+	resp, err := c.CheckPassword(context.Background(), "unique-password")
+	if err != nil {
+		t.Fatalf("expected no error for 404, got: %v", err)
 	}
-	var notFound *ErrNotFound
-	if !errors.As(err, &notFound) {
-		t.Errorf("expected ErrNotFound, got %T: %v", err, err)
+	if resp.SearchPassAnon.Count != "0" {
+		t.Errorf("expected count 0 for not-found password, got %s", resp.SearchPassAnon.Count)
 	}
 }
 

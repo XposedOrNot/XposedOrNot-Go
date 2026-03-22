@@ -3,6 +3,7 @@ package xposedornot
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -30,6 +31,11 @@ func (c *Client) checkEmailFree(ctx context.Context, email string) (*CheckEmailF
 	reqURL := fmt.Sprintf("%s/v1/check-email/%s", c.baseURL, url.PathEscape(email))
 	body, err := c.doRequest(ctx, "GET", reqURL)
 	if err != nil {
+		// 404 means email not found in any breaches — this is a valid result
+		var notFound *ErrNotFound
+		if errors.As(err, &notFound) {
+			return &CheckEmailFreeResponse{}, nil, nil
+		}
 		return nil, nil, fmt.Errorf("check email (free): %w", err)
 	}
 

@@ -22,7 +22,7 @@ func TestGetBreachesAll(t *testing.T) {
 				"breachedDate": "2013-10-04",
 				"domain": "adobe.com",
 				"industry": "Technology",
-				"exposedData": "emails,passwords",
+				"exposedData": ["emails","passwords"],
 				"exposedRecords": 153000000,
 				"verified": true,
 				"logo": "https://example.com/adobe.png",

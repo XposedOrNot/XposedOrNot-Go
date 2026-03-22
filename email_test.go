@@ -256,12 +256,11 @@ func TestCheckEmailNotFound(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error creating client: %v", err)
 	}
-	_, _, err = c.CheckEmail(context.Background(), "clean@example.com")
-	if err == nil {
-		t.Fatal("expected error, got nil")
+	free, _, err := c.CheckEmail(context.Background(), "clean@example.com")
+	if err != nil {
+		t.Fatalf("expected no error for 404, got: %v", err)
 	}
-	var notFound *ErrNotFound
-	if !errors.As(err, &notFound) {
-		t.Errorf("expected ErrNotFound, got %T: %v", err, err)
+	if len(free.Breaches) != 0 {
+		t.Errorf("expected empty breaches for not-found email, got %d", len(free.Breaches))
 	}
 }

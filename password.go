@@ -3,6 +3,7 @@ package xposedornot
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 )
 
@@ -22,6 +23,16 @@ func (c *Client) CheckPassword(ctx context.Context, password string) (*CheckPass
 
 	body, err := c.doRequest(ctx, "GET", url)
 	if err != nil {
+		// 404 means the password hash prefix was not found — password is not exposed
+		var notFound *ErrNotFound
+		if errors.As(err, &notFound) {
+			return &CheckPasswordResponse{
+				SearchPassAnon: PasswordAnonResult{
+					Anon:  prefix,
+					Count: "0",
+				},
+			}, nil
+		}
 		return nil, fmt.Errorf("check password: %w", err)
 	}
 
