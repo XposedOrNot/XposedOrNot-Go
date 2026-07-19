@@ -21,7 +21,7 @@ const (
 // Client is an API client for the XposedOrNot service.
 type Client struct {
 	baseURL         string
-	plusBaseURL      string
+	plusBaseURL     string
 	passwordBaseURL string
 	apiKey          string
 	httpClient      *http.Client
@@ -41,7 +41,7 @@ type Client struct {
 func NewClient(opts ...ClientOption) (*Client, error) {
 	c := &Client{
 		baseURL:         defaultBaseURL,
-		plusBaseURL:      defaultPlusBaseURL,
+		plusBaseURL:     defaultPlusBaseURL,
 		passwordBaseURL: defaultPasswordBaseURL,
 		httpClient:      &http.Client{Timeout: defaultTimeout},
 		maxRetries:      defaultMaxRetries,
