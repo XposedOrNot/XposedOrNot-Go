@@ -31,4 +31,14 @@ func main() {
 			fmt.Printf("  Breach: %s (Domain: %s, Records: %d)\n", b.BreachID, b.Domain, b.XposedRecords)
 		}
 	}
+
+	report, err := client.GetDomainBreaches(ctx)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("Domain summary: %v\n", report.Metrics.DomainSummary)
+	fmt.Printf("Yearly metrics: %v\n", report.Metrics.YearlyMetrics)
+	for _, record := range report.Metrics.BreachesDetails {
+		fmt.Printf("  %s (%s): %s\n", record.Email, record.Domain, record.Breach)
+	}
 }

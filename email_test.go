@@ -264,3 +264,124 @@ func TestCheckEmailNotFound(t *testing.T) {
 		t.Errorf("expected empty breaches for not-found email, got %d", len(free.Breaches))
 	}
 }
+
+func TestCheckEmailFreeIncludeDetails(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("include_details") != "true" {
+			t.Errorf("expected include_details=true, got %q", r.URL.Query().Get("include_details"))
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"breaches":[["Adobe","LinkedIn","Dropbox"]],"email":"test@example.com","status":"success"}`))
+	}))
+	defer srv.Close()
+
+	c, err := NewClient(WithBaseURL(srv.URL), WithAllowInsecure())
+	if err != nil {
+		t.Fatalf("unexpected error creating client: %v", err)
+	}
+	free, _, err := c.CheckEmail(context.Background(), "test@example.com", WithIncludeDetails())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if free.Email != "test@example.com" {
+		t.Errorf("expected email %q, got %q", "test@example.com", free.Email)
+	}
+	if free.Status != "success" {
+		t.Errorf("expected status %q, got %q", "success", free.Status)
+	}
+	names := free.BreachNames()
+	if len(names) != 3 || names[0] != "Adobe" {
+		t.Errorf("unexpected breach names: %v", names)
+	}
+}
+
+func TestCheckEmailFreeNoIncludeDetailsByDefault(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.RawQuery != "" {
+			t.Errorf("expected no query params, got %q", r.URL.RawQuery)
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"breaches":[["Adobe"]]}`))
+	}))
+	defer srv.Close()
+
+	c, err := NewClient(WithBaseURL(srv.URL), WithAllowInsecure())
+	if err != nil {
+		t.Fatalf("unexpected error creating client: %v", err)
+	}
+	_, _, err = c.CheckEmail(context.Background(), "test@example.com")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestCheckEmailFreeFlatBreachesList(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"breaches":["Adobe","LinkedIn"]}`))
+	}))
+	defer srv.Close()
+
+	c, err := NewClient(WithBaseURL(srv.URL), WithAllowInsecure())
+	if err != nil {
+		t.Fatalf("unexpected error creating client: %v", err)
+	}
+	free, _, err := c.CheckEmail(context.Background(), "test@example.com")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	names := free.BreachNames()
+	if len(names) != 2 || names[0] != "Adobe" || names[1] != "LinkedIn" {
+		t.Errorf("unexpected breach names: %v", names)
+	}
+}
+
+func TestBreachAnalyticsWithToken(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("email") != "test@example.com" {
+			t.Errorf("expected email param, got %q", r.URL.Query().Get("email"))
+		}
+		if r.URL.Query().Get("token") != "sensitive-token" {
+			t.Errorf("expected token %q, got %q", "sensitive-token", r.URL.Query().Get("token"))
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"BreachesSummary":{"site":"Adobe;LinkedIn;Dropbox"}}`))
+	}))
+	defer srv.Close()
+
+	c, err := NewClient(WithBaseURL(srv.URL), WithAllowInsecure())
+	if err != nil {
+		t.Fatalf("unexpected error creating client: %v", err)
+	}
+	resp, err := c.BreachAnalytics(context.Background(), "test@example.com", WithToken("sensitive-token"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	names := resp.BreachesSummary.BreachNames()
+	if len(names) != 3 || names[0] != "Adobe" || names[2] != "Dropbox" {
+		t.Errorf("unexpected breach names: %v", names)
+	}
+}
+
+func TestBreachAnalyticsNoTokenByDefault(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := r.URL.Query()["token"]; ok {
+			t.Error("expected no token param")
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"BreachesSummary":{"site":""}}`))
+	}))
+	defer srv.Close()
+
+	c, err := NewClient(WithBaseURL(srv.URL), WithAllowInsecure())
+	if err != nil {
+		t.Fatalf("unexpected error creating client: %v", err)
+	}
+	resp, err := c.BreachAnalytics(context.Background(), "test@example.com")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if names := resp.BreachesSummary.BreachNames(); len(names) != 0 {
+		t.Errorf("expected no breach names for empty site, got %v", names)
+	}
+}

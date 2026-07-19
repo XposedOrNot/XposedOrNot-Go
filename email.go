@@ -15,7 +15,7 @@ import (
 //
 // For the free API, only CheckEmailFreeResponse is populated (second return value is nil).
 // For the Plus API, only CheckEmailPlusResponse is populated (first return value is nil).
-func (c *Client) CheckEmail(ctx context.Context, email string) (*CheckEmailFreeResponse, *CheckEmailPlusResponse, error) {
+func (c *Client) CheckEmail(ctx context.Context, email string, opts ...RequestOption) (*CheckEmailFreeResponse, *CheckEmailPlusResponse, error) {
 	email = strings.TrimSpace(email)
 	if err := validateEmail(email); err != nil {
 		return nil, nil, fmt.Errorf("check email: %w", err)
@@ -24,11 +24,18 @@ func (c *Client) CheckEmail(ctx context.Context, email string) (*CheckEmailFreeR
 	if c.apiKey != "" {
 		return c.checkEmailPlus(ctx, email)
 	}
-	return c.checkEmailFree(ctx, email)
+	return c.checkEmailFree(ctx, email, opts)
 }
 
-func (c *Client) checkEmailFree(ctx context.Context, email string) (*CheckEmailFreeResponse, *CheckEmailPlusResponse, error) {
+func (c *Client) checkEmailFree(ctx context.Context, email string, opts []RequestOption) (*CheckEmailFreeResponse, *CheckEmailPlusResponse, error) {
 	reqURL := fmt.Sprintf("%s/v1/check-email/%s", c.baseURL, url.PathEscape(email))
+	params := url.Values{}
+	for _, opt := range opts {
+		opt(params)
+	}
+	if len(params) > 0 {
+		reqURL += "?" + params.Encode()
+	}
 	body, err := c.doRequest(ctx, "GET", reqURL)
 	if err != nil {
 		// 404 means email not found in any breaches — this is a valid result
@@ -63,13 +70,16 @@ func (c *Client) checkEmailPlus(ctx context.Context, email string) (*CheckEmailF
 
 // BreachAnalytics retrieves detailed breach analytics for the given email
 // address, including breach details, summary, metrics, and paste information.
-func (c *Client) BreachAnalytics(ctx context.Context, email string) (*BreachAnalyticsResponse, error) {
+func (c *Client) BreachAnalytics(ctx context.Context, email string, opts ...RequestOption) (*BreachAnalyticsResponse, error) {
 	email = strings.TrimSpace(email)
 	if err := validateEmail(email); err != nil {
 		return nil, fmt.Errorf("breach analytics: %w", err)
 	}
 
 	params := url.Values{"email": {email}}
+	for _, opt := range opts {
+		opt(params)
+	}
 	reqURL := fmt.Sprintf("%s/v1/breach-analytics?%s", c.baseURL, params.Encode())
 	body, err := c.doRequest(ctx, "GET", reqURL)
 	if err != nil {

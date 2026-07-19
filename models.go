@@ -1,6 +1,11 @@
 package xposedornot
 
-import "time"
+import (
+	"encoding/json"
+	"net/url"
+	"strings"
+	"time"
+)
 
 // ClientOption is a functional option for configuring the Client.
 type ClientOption func(*Client)
@@ -65,24 +70,84 @@ func WithAllowInsecure() ClientOption {
 	}
 }
 
+type RequestOption func(url.Values)
+
+func WithBreachID(id string) RequestOption {
+	return func(v url.Values) {
+		v.Set("breach_id", id)
+	}
+}
+
+func WithToken(token string) RequestOption {
+	return func(v url.Values) {
+		v.Set("token", token)
+	}
+}
+
+func WithIncludeDetails() RequestOption {
+	return func(v url.Values) {
+		v.Set("include_details", "true")
+	}
+}
+
 // --- Response types ---
 
 // CheckEmailFreeResponse is the response from the free check-email endpoint.
 type CheckEmailFreeResponse struct {
 	Breaches [][]string `json:"breaches"`
+	Email    string     `json:"email"`
+	Status   string     `json:"status"`
+}
+
+func (r *CheckEmailFreeResponse) UnmarshalJSON(data []byte) error {
+	var raw struct {
+		Breaches json.RawMessage `json:"breaches"`
+		Email    string          `json:"email"`
+		Status   string          `json:"status"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	r.Email = raw.Email
+	r.Status = raw.Status
+	r.Breaches = nil
+	if len(raw.Breaches) == 0 {
+		return nil
+	}
+	var nested [][]string
+	if err := json.Unmarshal(raw.Breaches, &nested); err == nil {
+		r.Breaches = nested
+		return nil
+	}
+	var flat []string
+	if err := json.Unmarshal(raw.Breaches, &flat); err != nil {
+		return err
+	}
+	if len(flat) > 0 {
+		r.Breaches = [][]string{flat}
+	}
+	return nil
+}
+
+func (r *CheckEmailFreeResponse) BreachNames() []string {
+	var names []string
+	for _, group := range r.Breaches {
+		names = append(names, group...)
+	}
+	return names
 }
 
 // PlusBreach represents a single breach entry from the Plus API.
 type PlusBreach struct {
-	BreachID     string `json:"breach_id"`
-	BreachedDate string `json:"breached_date"`
-	Logo         string `json:"logo"`
-	PasswordRisk string `json:"password_risk"`
-	Searchable   string `json:"searchable"`
-	XposedData   string `json:"xposed_data"`
-	XposedRecords int   `json:"xposed_records"`
-	XposureDesc  string `json:"xposure_desc"`
-	Domain       string `json:"domain"`
+	BreachID      string `json:"breach_id"`
+	BreachedDate  string `json:"breached_date"`
+	Logo          string `json:"logo"`
+	PasswordRisk  string `json:"password_risk"`
+	Searchable    string `json:"searchable"`
+	XposedData    string `json:"xposed_data"`
+	XposedRecords int    `json:"xposed_records"`
+	XposureDesc   string `json:"xposure_desc"`
+	Domain        string `json:"domain"`
 }
 
 // CheckEmailPlusResponse is the response from the Plus API check-email endpoint.
@@ -94,17 +159,17 @@ type CheckEmailPlusResponse struct {
 
 // ExposedBreach represents a single breach from the breaches listing endpoint.
 type ExposedBreach struct {
-	BreachID       string `json:"breachID"`
-	BreachedDate   string `json:"breachedDate"`
-	Domain         string `json:"domain"`
-	Industry       string `json:"industry"`
+	BreachID       string   `json:"breachID"`
+	BreachedDate   string   `json:"breachedDate"`
+	Domain         string   `json:"domain"`
+	Industry       string   `json:"industry"`
 	ExposedData    []string `json:"exposedData"`
-	ExposedRecords int    `json:"exposedRecords"`
-	Verified       bool   `json:"verified"`
-	Logo           string `json:"logo"`
-	References     string `json:"references"`
-	Details        string `json:"details"`
-	PasswordRisk   string `json:"password_risk"`
+	ExposedRecords int      `json:"exposedRecords"`
+	Verified       bool     `json:"verified"`
+	Logo           string   `json:"logo"`
+	References     string   `json:"references"`
+	Details        string   `json:"details"`
+	PasswordRisk   string   `json:"password_risk"`
 }
 
 // GetBreachesResponse is the response from the breaches listing endpoint.
@@ -114,42 +179,52 @@ type GetBreachesResponse struct {
 
 // BreachDetail represents a single breach detail in breach analytics.
 type BreachDetail struct {
-	Breach       string `json:"breach"`
-	Details      string `json:"details"`
-	Domain       string `json:"domain"`
-	Industry     string `json:"industry"`
-	Logo         string `json:"logo"`
-	PasswordRisk string `json:"password_risk"`
-	References   string `json:"references"`
-	Searchable   string `json:"searchable"`
-	Verified     string `json:"verified"`
-	XposedData   string `json:"xposed_data"`
-	XposedDate   string `json:"xposed_date"`
-	XposedRecords int   `json:"xposed_records"`
+	Breach        string `json:"breach"`
+	Details       string `json:"details"`
+	Domain        string `json:"domain"`
+	Industry      string `json:"industry"`
+	Logo          string `json:"logo"`
+	PasswordRisk  string `json:"password_risk"`
+	References    string `json:"references"`
+	Searchable    string `json:"searchable"`
+	Verified      string `json:"verified"`
+	XposedData    string `json:"xposed_data"`
+	XposedDate    string `json:"xposed_date"`
+	XposedRecords int    `json:"xposed_records"`
 }
 
 // BreachesSummary contains summary information about an email's breaches.
 type BreachesSummary struct {
-	Site              string `json:"site"`
-	TotalBreaches     string `json:"total_breaches,omitempty"`
-	MostRecentBreach  string `json:"most_recent_breach,omitempty"`
-	FirstBreach       string `json:"first_breach,omitempty"`
-	ExposedData       string `json:"exposed_data,omitempty"`
-	PasswordRisk      string `json:"password_risk,omitempty"`
+	Site             string `json:"site"`
+	TotalBreaches    string `json:"total_breaches,omitempty"`
+	MostRecentBreach string `json:"most_recent_breach,omitempty"`
+	FirstBreach      string `json:"first_breach,omitempty"`
+	ExposedData      string `json:"exposed_data,omitempty"`
+	PasswordRisk     string `json:"password_risk,omitempty"`
+}
+
+func (s *BreachesSummary) BreachNames() []string {
+	var names []string
+	for _, name := range strings.Split(s.Site, ";") {
+		if name != "" {
+			names = append(names, name)
+		}
+	}
+	return names
 }
 
 // BreachMetrics contains metrics derived from breach analytics.
 type BreachMetrics struct {
-	Industry       []interface{} `json:"industry"`
+	Industry         []interface{} `json:"industry"`
 	PasswordStrength []interface{} `json:"passwords_strength"`
-	YearlyBreaches []interface{} `json:"yearwise_details"`
-	XposedData     []interface{} `json:"xposed_data"`
+	YearlyBreaches   []interface{} `json:"yearwise_details"`
+	XposedData       []interface{} `json:"xposed_data"`
 }
 
 // PasteSummary contains paste-related summary information.
 type PasteSummary struct {
-	Count    int    `json:"cnt"`
-	Domain   string `json:"domain"`
+	Count     int    `json:"cnt"`
+	Domain    string `json:"domain"`
 	FirstSeen string `json:"first_seen,omitempty"`
 	LastSeen  string `json:"last_seen,omitempty"`
 }
@@ -178,4 +253,24 @@ type PasswordAnonResult struct {
 // CheckPasswordResponse is the response from the password check endpoint.
 type CheckPasswordResponse struct {
 	SearchPassAnon PasswordAnonResult `json:"SearchPassAnon"`
+}
+
+type DomainBreachDetail struct {
+	Email  string `json:"email"`
+	Domain string `json:"domain"`
+	Breach string `json:"breach"`
+}
+
+type DomainBreachMetrics struct {
+	YearlyMetrics      map[string]int         `json:"Yearly_Metrics"`
+	DomainSummary      map[string]int         `json:"Domain_Summary"`
+	BreachSummary      map[string]int         `json:"Breach_Summary"`
+	BreachesDetails    []DomainBreachDetail   `json:"Breaches_Details"`
+	Top10Breaches      map[string]int         `json:"Top10_Breaches"`
+	DetailedBreachInfo map[string]interface{} `json:"Detailed_Breach_Info"`
+}
+
+type DomainBreachesResponse struct {
+	Status  string              `json:"status"`
+	Metrics DomainBreachMetrics `json:"metrics"`
 }

@@ -30,9 +30,10 @@
 - [Requirements](#requirements)
 - [Quick Start](#quick-start)
 - [API Reference](#api-reference)
-  - [CheckEmail](#checkemailctx-email)
-  - [GetBreaches](#getbreachesctx-domain)
-  - [BreachAnalytics](#breachanalyticsctx-email)
+  - [CheckEmail](#checkemailctx-email-opts)
+  - [GetBreaches](#getbreachesctx-domain-opts)
+  - [BreachAnalytics](#breachanalyticsctx-email-opts)
+  - [GetDomainBreaches](#getdomainbreachesctx)
   - [CheckPassword](#checkpasswordctx-password)
 - [Error Handling](#error-handling)
 - [Rate Limits](#rate-limits)
@@ -112,7 +113,7 @@ Create a new client with functional options. See [Configuration Options](#config
 
 ### Methods
 
-#### `CheckEmail(ctx, email)`
+#### `CheckEmail(ctx, email, opts...)`
 
 Check if an email address has been exposed in any data breaches. Returns the free API response or the Plus API response depending on whether an API key is configured.
 
@@ -122,7 +123,10 @@ free, _, err := client.CheckEmail(ctx, "user@example.com")
 if err != nil {
 	log.Fatal(err)
 }
-fmt.Println("Breaches:", free.Breaches)
+fmt.Println("Breaches:", free.BreachNames())
+fmt.Println("Status:", free.Status)
+
+free, _, err = client.CheckEmail(ctx, "user@example.com", xon.WithIncludeDetails())
 ```
 
 ```go
@@ -142,7 +146,7 @@ for _, b := range plus.Breaches {
 **Signature:**
 
 ```go
-func (c *Client) CheckEmail(ctx context.Context, email string) (*CheckEmailFreeResponse, *CheckEmailPlusResponse, error)
+func (c *Client) CheckEmail(ctx context.Context, email string, opts ...RequestOption) (*CheckEmailFreeResponse, *CheckEmailPlusResponse, error)
 ```
 
 | Return Value | Type | Description |
@@ -151,11 +155,13 @@ func (c *Client) CheckEmail(ctx context.Context, email string) (*CheckEmailFreeR
 | `plus` | `*CheckEmailPlusResponse` | Populated when an API key is set (Free response is `nil`) |
 | `err` | `error` | Non-nil on validation failure, network error, or API error |
 
+`WithIncludeDetails()` requests detailed breach information from the free API. It is ignored when an API key is set, because the Plus API is always queried with detailed results. `CheckEmailFreeResponse` exposes `Email`, `Status`, and a `BreachNames()` helper that flattens the breach list.
+
 ---
 
-#### `GetBreaches(ctx, domain)`
+#### `GetBreaches(ctx, domain, opts...)`
 
-Retrieve a list of all known data breaches. Pass a non-empty `domain` string to filter results by domain.
+Retrieve a list of all known data breaches. Pass a non-empty `domain` string to filter results by domain, or use `WithBreachID` to fetch a specific breach.
 
 ```go
 // Get all breaches
@@ -171,26 +177,33 @@ if err != nil {
 	log.Fatal(err)
 }
 fmt.Println("Adobe breaches:", len(adobe.ExposedBreaches))
+
+one, err := client.GetBreaches(ctx, "", xon.WithBreachID("Adobe"))
+if err != nil {
+	log.Fatal(err)
+}
+fmt.Println("Breach:", one.ExposedBreaches[0].BreachID)
 ```
 
 **Signature:**
 
 ```go
-func (c *Client) GetBreaches(ctx context.Context, domain string) (*GetBreachesResponse, error)
+func (c *Client) GetBreaches(ctx context.Context, domain string, opts ...RequestOption) (*GetBreachesResponse, error)
 ```
 
 | Parameter | Type | Description |
 |---|---|---|
 | `ctx` | `context.Context` | Context for cancellation and timeouts |
 | `domain` | `string` | Filter by domain (pass `""` for all breaches) |
+| `opts` | `...RequestOption` | Optional request options such as `WithBreachID(id)` |
 
 **Returns:** `*GetBreachesResponse` containing a slice of `ExposedBreach` with fields including `BreachID`, `BreachedDate`, `Domain`, `Industry`, `ExposedData`, `ExposedRecords`, and `Verified`.
 
 ---
 
-#### `BreachAnalytics(ctx, email)`
+#### `BreachAnalytics(ctx, email, opts...)`
 
-Get detailed breach analytics for an email address, including breach details, summary statistics, metrics breakdowns, and paste exposures.
+Get detailed breach analytics for an email address, including breach details, summary statistics, metrics breakdowns, and paste exposures. Use `WithToken` to access sensitive breach data.
 
 ```go
 analytics, err := client.BreachAnalytics(ctx, "user@example.com")
@@ -199,21 +212,24 @@ if err != nil {
 }
 
 fmt.Println("Breach details:", len(analytics.ExposedBreaches.BreachesDetails))
-fmt.Println("Site:", analytics.BreachesSummary.Site)
+fmt.Println("Breach names:", analytics.BreachesSummary.BreachNames())
 fmt.Println("Total breaches:", analytics.BreachesSummary.TotalBreaches)
 fmt.Println("Most recent:", analytics.BreachesSummary.MostRecentBreach)
+
+analytics, err = client.BreachAnalytics(ctx, "user@example.com", xon.WithToken("your-token"))
 ```
 
 **Signature:**
 
 ```go
-func (c *Client) BreachAnalytics(ctx context.Context, email string) (*BreachAnalyticsResponse, error)
+func (c *Client) BreachAnalytics(ctx context.Context, email string, opts ...RequestOption) (*BreachAnalyticsResponse, error)
 ```
 
 | Parameter | Type | Description |
 |---|---|---|
 | `ctx` | `context.Context` | Context for cancellation and timeouts |
 | `email` | `string` | Email address to analyze |
+| `opts` | `...RequestOption` | Optional request options such as `WithToken(token)` |
 
 **Returns:** `*BreachAnalyticsResponse` with the following fields:
 
@@ -224,6 +240,36 @@ func (c *Client) BreachAnalytics(ctx context.Context, email string) (*BreachAnal
 | `BreachMetrics` | `BreachMetrics` | Breakdowns by industry, password strength, year, and data type |
 | `PastesSummary` | `PasteSummary` | Paste exposure summary |
 | `ExposedPastes` | `[]interface{}` | Raw paste exposure entries |
+
+---
+
+#### `GetDomainBreaches(ctx)`
+
+Get breach information for the domains verified against your API key. Requires an API key with domains verified at the free [CXO dashboard](https://xposedornot.com/dashboard).
+
+```go
+client, _ := xon.NewClient(xon.WithAPIKey("your-api-key"))
+
+report, err := client.GetDomainBreaches(ctx)
+if err != nil {
+	log.Fatal(err)
+}
+
+fmt.Println("Domain summary:", report.Metrics.DomainSummary)
+fmt.Println("Yearly metrics:", report.Metrics.YearlyMetrics)
+fmt.Println("Top 10 breaches:", report.Metrics.Top10Breaches)
+for _, record := range report.Metrics.BreachesDetails {
+	fmt.Printf("  %s (%s): %s\n", record.Email, record.Domain, record.Breach)
+}
+```
+
+**Signature:**
+
+```go
+func (c *Client) GetDomainBreaches(ctx context.Context) (*DomainBreachesResponse, error)
+```
+
+**Returns:** `*DomainBreachesResponse` with a `Status` string and a `Metrics` struct containing `YearlyMetrics`, `DomainSummary`, `BreachSummary`, `BreachesDetails`, `Top10Breaches`, and `DetailedBreachInfo`. Returns `*ErrAuthentication` if no API key is configured or the key is invalid.
 
 ---
 
@@ -333,6 +379,16 @@ client, err := xon.NewClient(
 | `WithMaxRetries(n)` | `3` | Maximum retries on HTTP 429 responses |
 | `WithCustomHeaders(h)` | `nil` | Additional headers included in every request |
 | `WithAllowInsecure()` | `false` | Disable HTTPS enforcement (testing only) |
+
+### Per-Request Options
+
+Some methods accept optional `RequestOption` values:
+
+| Option | Applies To | Description |
+|---|---|---|
+| `WithIncludeDetails()` | `CheckEmail` (free API) | Request detailed breach information |
+| `WithToken(token)` | `BreachAnalytics` | Access sensitive breach data |
+| `WithBreachID(id)` | `GetBreaches` | Fetch a specific breach by ID |
 
 ## Contributing
 
